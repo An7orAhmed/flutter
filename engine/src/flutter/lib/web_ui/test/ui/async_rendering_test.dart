@@ -45,6 +45,18 @@ class TestRasterizer extends ViewRasterizer {
   }
 }
 
+class _RecordingRasterizer extends TestRasterizer {
+  _RecordingRasterizer(super.view, super.displayFactory);
+
+  final List<bool> frameHasPaintableContent = <bool>[];
+
+  @override
+  Future<void> draw(LayerTree tree, FrameTimingRecorder? recorder) async {
+    await super.draw(tree, recorder);
+    frameHasPaintableContent.add(tree.rootLayer.needsPainting);
+  }
+}
+
 class FakeDisplayCanvas extends DisplayCanvas {
   @override
   final DomElement hostElement = domDocument.createElement('div');
@@ -301,4 +313,55 @@ void testMain() {
 
     expect(warnings, contains(contains('Cannot render platform views: 124')));
   });
+  test('queued scene retains picture after its previous engine layer is disposed', () async {
+    final EngineFlutterView view = EnginePlatformDispatcher.instance.implicitView!;
+    final rasterizer = _RecordingRasterizer(
+      view,
+      DisplayCanvasFactory<DisplayCanvas>(createCanvas: FakeDisplayCanvas.new),
+    )..prepareCompleter = Completer<void>();
+
+    final ViewRasterizer previousRasterizer = renderer.rasterizers[view.viewId]!;
+    renderer.rasterizers[view.viewId] = rasterizer;
+    addTearDown(() {
+      renderer.rasterizers[view.viewId] = previousRasterizer;
+      rasterizer.dispose();
+    });
+
+    final ui.Scene firstScene = ui.SceneBuilder().build();
+    addTearDown(firstScene.dispose);
+    final Future<void> firstFrame = renderer.renderScene(firstScene, view);
+
+    final pictureRecorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(pictureRecorder, const ui.Rect.fromLTWH(0, 0, 40, 40));
+    canvas.drawRect(
+      const ui.Rect.fromLTWH(0, 0, 40, 40),
+      ui.Paint()..color = const ui.Color(0xFF0000FF),
+    );
+    final ui.Picture picture = pictureRecorder.endRecording();
+    addTearDown(picture.dispose);
+
+    final sceneBuilder = ui.SceneBuilder();
+    final ui.OffsetEngineLayer previousLayer = sceneBuilder.pushOffset(0, 0);
+    sceneBuilder.addPicture(ui.Offset.zero, picture);
+    sceneBuilder.pop();
+
+    final ui.Scene queuedScene = sceneBuilder.build();
+    addTearDown(queuedScene.dispose);
+    picture.dispose();
+
+    final Future<void> queuedFrame = renderer.renderScene(queuedScene, view);
+    try {
+      expect(rasterizer.queue.next?.scene, same(queuedScene));
+
+      // The framework replaces and disposes retained engine layers while the
+      // previous frame is still waiting for the rasterizer to finish.
+      previousLayer.dispose();
+    } finally {
+      rasterizer.prepareCompleter!.complete();
+    }
+
+    await Future.wait(<Future<void>>[firstFrame, queuedFrame]);
+    expect(rasterizer.frameHasPaintableContent, <bool>[false, true]);
+  });
+
 }
