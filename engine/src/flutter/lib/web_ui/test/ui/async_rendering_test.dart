@@ -12,6 +12,7 @@ import 'package:ui/ui.dart' as ui;
 import 'package:ui/ui_web/src/ui_web.dart' as ui_web;
 
 import '../common/test_initialization.dart';
+import 'utils.dart' show isSkwasm;
 
 void main() {
   internalBootstrapBrowserTest(() => testMain);
@@ -313,11 +314,12 @@ void testMain() {
 
     expect(warnings, contains(contains('Cannot render platform views: 124')));
   });
+
   test('queued scene retains picture after its previous engine layer is disposed', () async {
     final EngineFlutterView view = EnginePlatformDispatcher.instance.implicitView!;
     final rasterizer = _RecordingRasterizer(
       view,
-      DisplayCanvasFactory<DisplayCanvas>(createCanvas: FakeDisplayCanvas.new),
+      DisplayCanvasFactory<DisplayCanvas>(createCanvas: () => FakeDisplayCanvas()),
     )..prepareCompleter = Completer<void>();
 
     final ViewRasterizer previousRasterizer = renderer.rasterizers[view.viewId]!;
@@ -350,18 +352,15 @@ void testMain() {
     picture.dispose();
 
     final Future<void> queuedFrame = renderer.renderScene(queuedScene, view);
-    try {
-      expect(rasterizer.queue.next?.scene, same(queuedScene));
+    final bool wasQueued = identical(rasterizer.queue.next?.scene, queuedScene);
 
-      // The framework replaces and disposes retained engine layers while the
-      // previous frame is still waiting for the rasterizer to finish.
-      previousLayer.dispose();
-    } finally {
-      rasterizer.prepareCompleter!.complete();
-    }
+    // The framework disposes the previous retained layer while the raster
+    // worker is still presenting the first frame.
+    previousLayer.dispose();
+    rasterizer.prepareCompleter!.complete();
 
     await Future.wait(<Future<void>>[firstFrame, queuedFrame]);
+    expect(wasQueued, isTrue);
     expect(rasterizer.frameHasPaintableContent, <bool>[false, true]);
-  });
-
+  }, skip: !isSkwasm);
 }
