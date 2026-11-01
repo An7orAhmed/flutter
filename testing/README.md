@@ -30,7 +30,8 @@ Flutter's engine/scripts/standard.gclient must be copied to .gclient, and downlo
 From the repository root:
 
 ~~~sh
-dart format --output=none --set-exit-if-changed   engine/src/flutter/lib/web_ui/test/skwasm/wimp_smoke_test.dart   engine/src/flutter/lib/web_ui/test/ui/async_rendering_test.dart
+dart format --output=none --set-exit-if-changed engine/src/flutter/lib/web_ui/test/skwasm/wimp_smoke_test.dart
+dart format --output=none --set-exit-if-changed engine/src/flutter/lib/web_ui/test/ui/async_rendering_test.dart
 git diff --check
 ~~~
 
