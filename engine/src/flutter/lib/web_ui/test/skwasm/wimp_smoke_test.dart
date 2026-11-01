@@ -6,11 +6,11 @@ import 'dart:math' as math;
 
 import 'package:test/bootstrap/browser.dart';
 import 'package:test/test.dart';
-import 'package:ui/src/engine.dart' show renderer;
 import 'package:ui/ui.dart' as ui;
 
 import '../common/rendering.dart';
 import '../common/test_initialization.dart';
+import '../ui/utils.dart' show isWimp;
 
 void main() {
   internalBootstrapBrowserTest(() => testMain);
@@ -20,10 +20,6 @@ void testMain() {
   setUpUnitTests(withImplicitView: true);
 
   test('Wimp renders paths and text across consecutive frames', () async {
-    if (!renderer.isWimp) {
-      return;
-    }
-
     final paragraphBuilder = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 18))
       ..addText('Impeller Web smoke test');
     final paragraph = paragraphBuilder.build()
@@ -64,5 +60,5 @@ void testMain() {
     }
 
     paragraph.dispose();
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, skip: !isWimp, timeout: const Timeout(Duration(minutes: 2)));
 }
