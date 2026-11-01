@@ -82,11 +82,15 @@ These are candidate commands, not verified passing commands. Validate build prer
 
 ## Current work snapshot (2026-11-01)
 
-**Current implementation branch:** `impeller-web-smoke-test` in `An7orAhmed/flutter`.
+**Current active regression branch:** `web-queued-picture-regression`, created from fork `master`. The earlier independent test branch is `impeller-web-smoke-test`.
 
 **Existing change:** `engine/src/flutter/lib/web_ui/test/skwasm/wimp_smoke_test.dart` on branch `impeller-web-smoke-test`. It contains (1) a Wimp-only smoke test that renders a paragraph and multiple path traces over 30 frames and (2) a Wimp-only `Picture.toImageSync` test that checks known white background pixels and a blue stroked path using `rawRgba` image bytes. The branch contains only this test file. Neither test is demonstrated to resolve a particular upstream issue.
 
 **Known limitations:** No engine build, Dart formatter, or browser tests have been executed. A manual static review confirmed two Wimp-gated test cases, pixel assertions, and no lines longer than 100 characters; that is not a runtime verification. The rendering loop test still only checks successful completion. The pixel test relies on Wimp image readback and may reveal compatibility issues when executed. The usefulness, determinism, and design require human review before a PR. No upstream PR has been opened.
+
+**Queued picture regression:** `web-queued-picture-regression` modifies only `engine/src/flutter/lib/web_ui/test/ui/async_rendering_test.dart`. A new test uses the existing fake rasterizer and a `Completer` gate to hold the first frame in `prepareToDraw`, queue a second scene under an offset engine layer, dispose that retained layer, and then release rendering. A scoped `_RecordingRasterizer` checks whether the second frame is still paintable. The test is gated to Skwasm and Wimp with `skip: !isSkwasm`. Static review confirmed the expected source assertions, no overlong lines, and one changed upstream test file. No Dart formatter, engine build, or browser test has run. It is expected to fail against the current implementation, but actual red test results are not verified.
+
+**Related upstream bug:** https://github.com/flutter/flutter/issues/193696, open at inspection on 2026-11-01. The test addresses the reported premature picture disposal during queuing. It does **not** address the separate question of what frame timings should be reported for dropped frames. Do not generate fake timing entries without an agreed contract.
 
 **Upstream status:** Wimp tracking issue `flutter/flutter#174980` was open when checked. Wimp implementation and test configuration already exist upstream.
 
@@ -94,11 +98,11 @@ These are candidate commands, not verified passing commands. Validate build prer
 
 ## Immediate next tasks
 
-1. Set up and verify the local Web engine build environment.
-2. Run the existing Wimp tests and the smoke test, including `Picture.toImageSync` pixel readback. Capture exact command lines and pass/fail output.
-3. Check the pixel test against Skwasm and existing image tests; determine whether it adds sufficient new Wimp coverage. Revise or discard it if redundant or flaky.
-4. Investigate the open `flutter/flutter#193696` queued-frame issue with a deterministic local reproduction before modifying render queue behavior. Do not assume that dropped frames should generate fake raster timings.
-5. Identify a scoped reproducible Wimp defect, implement a focused fix and regression test, verify locally, then prepare an accurate upstream PR for human review.
+1. Set up and verify the local Web engine build environment with `gclient`, the Emscripten SDK, and `felt`.
+2. Run the existing Wimp tests and `impeller-web-smoke-test`; confirm rendering and pixel readback results.
+3. Run `felt test --suite chrome-dart2wasm-wimp-ui test/ui/async_rendering_test.dart` from the Web UI directory on branch `web-queued-picture-regression`, after the Wimp artifacts are available. Also run the Skwasm UI test suite. Confirm that the added test fails for the **expected** queued-picture reason, not for unrelated harness failures.
+4. If the regression is reproduced, investigate a minimal fix for queued picture lifetime and write a testable, verified change. Separately discuss skipped frame timing behavior with Flutter maintainers before trying to report timings for discarded frames.
+5. Review both test branches for overlap with upstream test coverage and current open PRs, format and verify relevant files, and submit only clean, focused, human-reviewed source changes to upstream.
 
 ## Session log
 
@@ -119,6 +123,16 @@ These are candidate commands, not verified passing commands. Validate build prer
 - Did not run `felt`, Dart formatter, or browser tests. The available environment has no Flutter checkout/Dart SDK and cannot clone from GitHub through the container network.
 - Investigated open issue https://github.com/flutter/flutter/issues/193696 concerning queued frames and dropped timing records; no fix has been implemented. The current timing recorder requires build and raster timestamps, so fabricating values for skipped frames without a specified contract is unsafe.
 - No upstream PR or maintainer comment was created. Local test validation and human review remain required.
+
+### 2026-11-01 (queued frame reproduction)
+
+- Read this context, inspected `flutter/flutter#193696`, and confirmed that the fork and upstream `master` were at `fcfb4f203eae4a47807697f02b99251994e2ab21`.
+- Inspected `renderer.dart`, `LayerSceneBuilder`, `PrerollVisitor`, `ContainerLayer.dispose()`, and existing async rendering test helpers.
+- Created `web-queued-picture-regression` directly from fork `master`, separate from Wimp smoke tests and this context branch.
+- Added an asynchronous test in `engine/src/flutter/lib/web_ui/test/ui/async_rendering_test.dart` to deterministically queue a scene behind a blocked first render, dispose a previously retained offset layer, and assert that the queued scene still paints. The test uses an existing `TestRasterizer` subclass for the paintability observation and is skipped outside Skwasm/Wimp.
+- Last verified change commit: `332b37ed4d0b3b45bd375f9b2d1207be214c01af`. Comparison against fork `master` showed one modified file and no unrelated context files.
+- Only static verification was performed; the regression test has not been run and its expected failure has not been observed. Do not call the bug reproduced by execution yet. Do not submit the intentionally failing test upstream without a fix or maintainer agreement.
+- Next: configure the engine build, run `felt build sdk wimp`, run Wimp and Skwasm UI suites on this branch, capture any failure, then work on the actual renderer fix if confirmed.
 
 ## Maintaining this file
 
