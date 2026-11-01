@@ -84,9 +84,9 @@ These are candidate commands, not verified passing commands. Validate build prer
 
 **Current implementation branch:** `impeller-web-smoke-test` in `An7orAhmed/flutter`.
 
-**Existing change:** `engine/src/flutter/lib/web_ui/test/skwasm/wimp_smoke_test.dart`. A first smoke test renders a paragraph and multiple path traces over 30 frames, using the existing Wimp test gate. Its inspiration was to exercise repeated path and text rendering; it is not yet a demonstrated fix for a specific upstream regression.
+**Existing change:** `engine/src/flutter/lib/web_ui/test/skwasm/wimp_smoke_test.dart` on branch `impeller-web-smoke-test`. It contains (1) a Wimp-only smoke test that renders a paragraph and multiple path traces over 30 frames and (2) a Wimp-only `Picture.toImageSync` test that checks known white background pixels and a blue stroked path using `rawRgba` image bytes. The branch contains only this test file. Neither test is demonstrated to resolve a particular upstream issue.
 
-**Known limitations:** No local build or test run was verified in this conversation. The test only verifies successful rendering completion, without checking output pixels or other strong assertions. Its usefulness and design need human review before a PR. Do not claim that a PR has been opened or that the code is ready to merge.
+**Known limitations:** No engine build, Dart formatter, or browser tests have been executed. A manual static review confirmed two Wimp-gated test cases, pixel assertions, and no lines longer than 100 characters; that is not a runtime verification. The rendering loop test still only checks successful completion. The pixel test relies on Wimp image readback and may reveal compatibility issues when executed. The usefulness, determinism, and design require human review before a PR. No upstream PR has been opened.
 
 **Upstream status:** Wimp tracking issue `flutter/flutter#174980` was open when checked. Wimp implementation and test configuration already exist upstream.
 
@@ -95,10 +95,10 @@ These are candidate commands, not verified passing commands. Validate build prer
 ## Immediate next tasks
 
 1. Set up and verify the local Web engine build environment.
-2. Run the existing Wimp tests and the smoke test. Capture exact command lines and pass/fail output.
-3. Evaluate whether the smoke test adds value over existing coverage; if not, revise or discard it rather than submitting a weak PR.
-4. Identify a specific currently reproducible Wimp bug or missing test with a relevant upstream issue.
-5. Create a small fix with a regression test, verify locally, and prepare an accurate upstream PR for human review.
+2. Run the existing Wimp tests and the smoke test, including `Picture.toImageSync` pixel readback. Capture exact command lines and pass/fail output.
+3. Check the pixel test against Skwasm and existing image tests; determine whether it adds sufficient new Wimp coverage. Revise or discard it if redundant or flaky.
+4. Investigate the open `flutter/flutter#193696` queued-frame issue with a deterministic local reproduction before modifying render queue behavior. Do not assume that dropped frames should generate fake raster timings.
+5. Identify a scoped reproducible Wimp defect, implement a focused fix and regression test, verify locally, then prepare an accurate upstream PR for human review.
 
 ## Session log
 
@@ -109,6 +109,16 @@ These are candidate commands, not verified passing commands. Validate build prer
 - Created `impeller-web-smoke-test` and a first Wimp rendering smoke test. The test has not been verified locally.
 - Confirmed Flutter's AI contribution policy specifically discourages unrelated agent planning Markdown files in upstream PRs.
 - Created separate `impeller-web-context` branch to preserve agent instructions and project memory without polluting upstream contributions.
+
+### 2026-11-01 (continued)
+
+- Re-read this file and verified the fork and upstream `master` matched at commit `fcfb4f203eae4a47807697f02b99251994e2ab21`.
+- Inspected the existing Wimp smoke test, renderer queue, Wimp issues, and relevant existing rendering tests.
+- Added a deterministic `Picture.toImageSync` pixel readback test to `impeller-web-smoke-test`. It checks white background pixels and a blue horizontal stroked path under Wimp. Verified the source commit and inspected the diff; implementation branch changes only `wimp_smoke_test.dart`.
+- Final source commit at inspection: `91c4b07e08a2bf66aa949adbcba16aae63106be3`.
+- Did not run `felt`, Dart formatter, or browser tests. The available environment has no Flutter checkout/Dart SDK and cannot clone from GitHub through the container network.
+- Investigated open issue https://github.com/flutter/flutter/issues/193696 concerning queued frames and dropped timing records; no fix has been implemented. The current timing recorder requires build and raster timestamps, so fabricating values for skipped frames without a specified contract is unsafe.
+- No upstream PR or maintainer comment was created. Local test validation and human review remain required.
 
 ## Maintaining this file
 
