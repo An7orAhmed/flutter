@@ -109,6 +109,4 @@ void testMain() {
       picture.dispose();
     }
   }, skip: !isWimp);
-
-
 }
