@@ -61,4 +61,54 @@ void testMain() {
 
     paragraph.dispose();
   }, skip: !isWimp, timeout: const Timeout(Duration(minutes: 2)));
+  test('Wimp rasterizes stroked paths into image pixels', () async {
+    const width = 64;
+    const height = 32;
+    const background = ui.Color(0xFFFFFFFF);
+    const stroke = ui.Color(0xFF0000FF);
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder, const ui.Rect.fromLTWH(0, 0, width, height));
+    canvas.drawColor(background, ui.BlendMode.src);
+
+    final path = ui.Path()
+      ..moveTo(8, 16)
+      ..lineTo(56, 16);
+    canvas.drawPath(
+      path,
+      ui.Paint()
+        ..color = stroke
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = 4,
+    );
+
+    final picture = recorder.endRecording();
+    try {
+      final image = picture.toImageSync(width, height);
+      try {
+        final data = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+        expect(data.lengthInBytes, width * height * 4);
+
+        ui.Color pixelAt(int x, int y) {
+          final offset = (y * width + x) * 4;
+          return ui.Color.fromARGB(
+            data.getUint8(offset + 3),
+            data.getUint8(offset),
+            data.getUint8(offset + 1),
+            data.getUint8(offset + 2),
+          );
+        }
+
+        expect(pixelAt(2, 2), background);
+        expect(pixelAt(16, 16), stroke);
+        expect(pixelAt(16, 25), background);
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      picture.dispose();
+    }
+  }, skip: !isWimp);
+
+
 }
